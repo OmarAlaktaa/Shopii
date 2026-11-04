@@ -1,0 +1,19 @@
+<Solution>
+  <Folder Name="/src/">
+    <File Path="../../Shopii Database Diagram.png" />
+    <File Path="../.gitignore" />
+  </Folder>
+  <Folder Name="/src/API/">
+    <Project Path="Shopii.API.csproj" />
+  </Folder>
+  <Folder Name="/src/Core/">
+    <Project Path="../Shopii.Application/Shopii.Application.csproj" Id="2db31192-88fb-413f-b564-0d2b720e45bf" />
+    <Project Path="../Shopii.Domain/Shopii.Domain.csproj" Id="8c7fc210-5cdd-4010-939d-f3c312187845" />
+  </Folder>
+  <Folder Name="/src/Infrastructure/">
+    <Project Path="../Shopii.Infrastructure/Shopii.Infrastructure.csproj" Id="94b9949c-0d7e-4484-8258-9d8520a6881c" />
+  </Folder>
+  <Folder Name="/src/Tests/">
+    <Project Path="../Shopii.Tests/Shopii.Tests.csproj" />
+  </Folder>
+</Solution>
