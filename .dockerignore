@@ -1,0 +1,52 @@
+# Build output
+**/bin/
+**/obj/
+**/TestResults/
+**/coverage/
+**/*.trx
+
+# IDE, editor and user-specific files
+**/.vs/
+**/.vscode/
+**/.idea/
+**/*.user
+**/*.suo
+**/*.userosscache
+**/*.sln.docstates
+**/*.DotSettings.user
+
+# Git metadata
+**/.git/
+**/.gitignore
+.gitattributes
+
+# Local SQLite databases, sidecar files, backups and write-ahead journals
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.db-journal
+**/*.db.bak-*
+
+# Local logs
+**/logs/
+**/*.log
+
+# Local secrets and environment-specific configuration
+**/.env
+**/.env.*
+!**/.env.example
+**/appsettings.Development*.json
+**/appsettings.*.local.json
+**/secrets.json
+
+# Visual Studio launch profiles are machine-specific
+**/Properties/launchSettings.json
+
+# Not needed to build/publish the API image
+Shopii.Tests/
+**/*.md
+**/*.png
+
+# Docker metadata itself
+Dockerfile
+.dockerignore
