@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Shopii.API.Logging;
 using Shopii.Application.Common.Exceptions;
 
 namespace Shopii.API.Extensions
@@ -30,22 +31,22 @@ namespace Shopii.API.Extensions
             }
             catch (NotFoundException ex)
             {
-                _logger.LogWarning(ex, "Resource not found: {Message}", ex.Message);
+                LogRejected(context, HttpStatusCode.NotFound, ex);
                 await WriteAsync(context, HttpStatusCode.NotFound, ex.Message);
             }
             catch (ForbiddenException ex)
             {
-                _logger.LogWarning(ex, "Forbidden: {Message}", ex.Message);
+                LogRejected(context, HttpStatusCode.Forbidden, ex);
                 await WriteAsync(context, HttpStatusCode.Forbidden, ex.Message);
             }
             catch (UnauthorizedException ex)
             {
-                _logger.LogWarning(ex, "Unauthorized: {Message}", ex.Message);
+                LogRejected(context, HttpStatusCode.Unauthorized, ex);
                 await WriteAsync(context, HttpStatusCode.Unauthorized, ex.Message);
             }
             catch (ValidationException ex)
             {
-                _logger.LogWarning(ex, "Validation failed: {Message}", ex.Message);
+                LogRejected(context, HttpStatusCode.BadRequest, ex);
                 await WriteAsync(context, HttpStatusCode.BadRequest, ex.Message);
             }
             catch (ArgumentOutOfRangeException ex)
@@ -53,19 +54,25 @@ namespace Shopii.API.Extensions
                 // Safety net for range checks that live below the validation
                 // pipeline (domain/application code). A bad client value is a
                 // 400, never a 500.
-                _logger.LogWarning(ex, "Argument out of range: {Message}", ex.Message);
+                LogRejected(context, HttpStatusCode.BadRequest, ex);
                 await WriteAsync(context, HttpStatusCode.BadRequest, ex.Message);
             }
             catch (ArgumentException ex)
             {
-                _logger.LogWarning(ex, "Invalid argument: {Message}", ex.Message);
+                LogRejected(context, HttpStatusCode.BadRequest, ex);
                 await WriteAsync(context, HttpStatusCode.BadRequest, ex.Message);
             }
             catch (DbUpdateException ex)
             {
+                context.Items[HttpContextItemKeys.ExceptionLogged] = true;
+
                 // Typically a foreign key violation: the record is still
                 // referenced by other rows and cannot be removed or updated.
-                _logger.LogWarning(ex, "Database update conflict.");
+                _logger.LogRequestConflict(
+                    context.Request.Method,
+                    context.Request.Path.Value ?? string.Empty,
+                    ex);
+
                 await WriteAsync(
                     context,
                     HttpStatusCode.Conflict,
@@ -73,14 +80,15 @@ namespace Shopii.API.Extensions
             }
             catch (Exception ex)
             {
+                context.Items[HttpContextItemKeys.ExceptionLogged] = true;
+
                 // Anything not handled above is an unexpected server-side
                 // failure. Log the full details but never leak them to the
                 // client.
-                _logger.LogError(
-                    ex,
-                    "Unhandled exception while processing {Method} {Path}",
+                _logger.LogUnhandledException(
                     context.Request.Method,
-                    context.Request.Path);
+                    context.Request.Path.Value ?? string.Empty,
+                    ex);
 
                 await WriteAsync(
                     context,
@@ -89,6 +97,24 @@ namespace Shopii.API.Extensions
             }
         }
 
+        /// <summary>
+        /// Prepares HTTP request details and delegates the actual logging to the logging extensions.
+        /// </summary>
+        private void LogRejected(
+            HttpContext context,
+            HttpStatusCode statusCode,
+            Exception exception)
+        {
+            _logger.LogRequestRejected(
+                (int)statusCode,
+                context.Request.Method,
+                context.Request.Path.Value ?? string.Empty,
+                exception);
+        }
+
+        /// <summary>
+        /// Writes a JSON response with the specified status code and message.
+        /// </summary>
         private static async Task WriteAsync(
             HttpContext context,
             HttpStatusCode statusCode,

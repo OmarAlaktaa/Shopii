@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
 using Shopii.API.Extensions;
+using Shopii.API.Logging;
 using Xunit;
 
 namespace Shopii.Tests
@@ -48,6 +49,27 @@ namespace Shopii.Tests
             Assert.Contains("An unexpected error occurred.", response.Body);
             Assert.DoesNotContain("sensitive internal detail", response.Body);
             Assert.Equal("application/json", response.ContentType);
+        }
+
+        /// <summary>
+        /// Verifies that unhandled exceptions are marked as already logged.
+        /// </summary>
+        /// <returns>
+        /// A task that represents the asynchronous test operation.
+        /// </returns>
+        [Fact] // This attribute ensures that the middleware marks unhandled exceptions as already logged.
+        public async Task UnhandledException_MarksExceptionAsAlreadyLogged()
+        {
+            var middleware = new ExceptionHandlingMiddleware(
+                _ => throw new Exception("boom"),
+                NullLogger<ExceptionHandlingMiddleware>.Instance);
+
+            var context = new DefaultHttpContext();
+            context.Response.Body = new MemoryStream();
+
+            await middleware.InvokeAsync(context);
+
+            Assert.True(context.Items[HttpContextItemKeys.ExceptionLogged] is true);
         }
 
         private static async Task<(int StatusCode, string Body, string? ContentType)> InvokeAsync(

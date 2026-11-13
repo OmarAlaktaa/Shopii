@@ -1,9 +1,11 @@
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Shopii.Application.Common.Auditing;
 using Shopii.Application.Features.Orders.Commands.UpdateOrderStatus;
 using Shopii.Application.Features.Orders.Queries.GetAllOrders;
 using Shopii.API.Models;
+using Shopii.Application.Interfaces.Services;
 
 namespace Shopii.API.Controllers
 {
@@ -14,10 +16,14 @@ namespace Shopii.API.Controllers
     public class AdminOrdersController : ControllerBase
     {
         private readonly IMediator _mediator;
+        private readonly IAuditLogger _auditLogger;
 
-        public AdminOrdersController(IMediator mediator)
+        public AdminOrdersController(
+            IMediator mediator,
+            IAuditLogger auditLogger)
         {
             _mediator = mediator;
+            _auditLogger = auditLogger;
         }
 
         // GET: api/admin/orders?pageNumber=1&pageSize=10
@@ -30,6 +36,16 @@ namespace Shopii.API.Controllers
         {
             var orders = await _mediator.Send(
                 new GetAllOrdersQuery(pageNumber, pageSize),
+                cancellationToken);
+
+            await _auditLogger.LogAsync(
+                new AuditEvent(
+                    AuditAction.OrdersListViewed,
+                    AuditEntityTypes.Order,
+                    Details: AuditDetails.Create(
+                        ("PageNumber", orders.PageNumber),
+                        ("PageSize", orders.PageSize),
+                        ("TotalCount", orders.TotalCount))),
                 cancellationToken);
 
             return Ok(orders);
@@ -49,6 +65,15 @@ namespace Shopii.API.Controllers
                     OrderId = id,
                     OrderStatusId = request.OrderStatusId
                 },
+                cancellationToken);
+
+            await _auditLogger.LogAsync(
+                new AuditEvent(
+                    AuditAction.OrderStatusChanged,
+                    AuditEntityTypes.Order,
+                    id,
+                    Details: AuditDetails.Create(
+                        ("OrderStatusId", request.OrderStatusId))),
                 cancellationToken);
 
             return Ok(order);

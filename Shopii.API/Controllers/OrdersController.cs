@@ -2,12 +2,14 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Shopii.API.Models;
+using Shopii.Application.Common.Auditing;
 using Shopii.Application.Features.Orders.Commands.CreateOrder;
 using Shopii.Application.Features.Orders.Commands.DeleteOrder;
 using Shopii.Application.Features.Orders.Commands.UpdateOrder;
 using Shopii.Application.Features.Orders.DTOs;
 using Shopii.Application.Features.Orders.Queries.GetMyOrders;
 using Shopii.Application.Features.Orders.Queries.GetOrderById;
+using Shopii.Application.Interfaces.Services;
 
 namespace Shopii.API.Controllers
 {
@@ -17,10 +19,14 @@ namespace Shopii.API.Controllers
     {
         // MediatR dispatches commands and queries to their corresponding handlers.
         private readonly IMediator _mediator;
+        private readonly IAuditLogger _auditLogger;
 
-        public OrdersController(IMediator mediator)
+        public OrdersController(
+            IMediator mediator,
+            IAuditLogger auditLogger)
         {
             _mediator = mediator;
+            _auditLogger = auditLogger;
         }
 
         // GET: api/orders?pageNumber=1&pageSize=10
@@ -56,6 +62,16 @@ namespace Shopii.API.Controllers
                 return NotFound();
             }
 
+            if (User.IsInRole("Admin"))
+            {
+                await _auditLogger.LogAsync(
+                    new AuditEvent(
+                        AuditAction.OrderViewed,
+                        AuditEntityTypes.Order,
+                        id),
+                    cancellationToken);
+            }
+
             return Ok(order);
         }
 
@@ -68,6 +84,17 @@ namespace Shopii.API.Controllers
             CancellationToken cancellationToken)
         {
             var order = await _mediator.Send(command, cancellationToken);
+
+            await _auditLogger.LogAsync(
+                new AuditEvent(
+                    AuditAction.OrderCreated,
+                    AuditEntityTypes.Order,
+                    order.OrderId,
+                    Details: AuditDetails.Create(
+                        ("ItemCount", order.Items.Count),
+                        ("TotalAmount", order.TotalAmount),
+                        ("PaymentMethodId", order.Payment?.PaymentMethodId))),
+                cancellationToken);
 
             return CreatedAtAction(
                 nameof(GetOrderById),
@@ -100,6 +127,17 @@ namespace Shopii.API.Controllers
             };
 
             var order = await _mediator.Send(command, cancellationToken);
+
+            await _auditLogger.LogAsync(
+                new AuditEvent(
+                    AuditAction.OrderUpdated,
+                    AuditEntityTypes.Order,
+                    id,
+                    Details: AuditDetails.Create(
+                        ("ItemCount", order.Items.Count),
+                        ("PaymentMethodId", order.Payment?.PaymentMethodId))),
+                cancellationToken);
+
             return Ok(order);
         }
 
@@ -112,6 +150,14 @@ namespace Shopii.API.Controllers
             CancellationToken cancellationToken)
         {
             await _mediator.Send(new DeleteOrderCommand(id), cancellationToken);
+
+            await _auditLogger.LogAsync(
+                new AuditEvent(
+                    AuditAction.OrderArchived,
+                    AuditEntityTypes.Order,
+                    id),
+                cancellationToken);
+
             return NoContent();
         }
     }

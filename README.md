@@ -21,6 +21,90 @@ dotnet run --project Shopii.API
 
 Swagger is available at `/swagger` in the Development environment.
 
+## Logging & audit trail
+
+The API uses Serilog for diagnostics and a separate SQLite audit table for
+security- and business-sensitive actions.
+
+### Diagnostic logs
+
+- **Console**: compact bracketed format with correlation id, trace id, and user id.
+- **Rolling file**: `logs/shopii-YYYYMMDD.log` relative to the process working
+  directory (usually `Shopii.API/logs` when running via `dotnet run --project`).
+  Files roll daily, keep 14 files, and are capped at 50 MB each.
+- **Seq**: `http://localhost:5341` when Seq is running. General application logs
+  belong in Seq, not in `ShopiiDb.db`.
+
+Every request gets an `X-Correlation-Id` (or accepts an incoming
+`X-Correlation-Id` / `X-Request-Id`). The value is echoed in the response and
+added to every log line for that request, so use it to join events in Seq.
+
+Request summaries log the method and path only; query strings, headers, request
+bodies, passwords, tokens, email addresses, and card data are never logged.
+Successful health probes are logged at `Verbose`, 4xx responses at `Warning`,
+and 5xx responses at `Error` (including an unhealthy `/health` probe). If the
+exception middleware already wrote the detailed error, the request summary is
+downgraded to `Information` to avoid duplicate error entries.
+
+`SensitiveDataDestructuringPolicy` is a defense-in-depth redaction layer for
+objects accidentally logged with `{@Object}`.
+
+Start Seq locally with Docker:
+
+```powershell
+docker run --name shopii-seq -d --restart unless-stopped `
+  -e ACCEPT_EULA=Y -p 5341:80 datalust/seq:latest
+```
+
+Open http://localhost:5341. Set the retention policy to 30 days in Seq
+(Settings → Data → Retention). Seq is intentionally not wrapped in
+`Serilog.Sinks.Async`; it already batches asynchronously.
+
+### Audit trail
+
+Security- and business-sensitive actions are written to the `AuditLogs` table in
+the SQLite database. Audit writes are best-effort: if the insert fails, the
+failure is logged as `AuditWriteFailed` and the original request still succeeds.
+The writer uses a dedicated DbContext scope and a short timeout so a failed audit
+insert cannot corrupt the request's unit of work or hang the request.
+
+Recorded actions include:
+
+- `LoginSucceeded`, `LoginFailed`, `LoginRejected`, `UserRegistered`
+- `UsersListViewed`, `UserProfileViewed`, `UserUpdated`, `OwnProfileUpdated`,
+  `UserDeleted`
+- `OrdersListViewed`, `OrderViewed`, `OrderCreated`, `OrderUpdated`,
+  `OrderStatusChanged`, `OrderArchived`
+- `ProductCreated`, `ProductUpdated`, `ProductDeleted`
+
+Each row contains the timestamp, actor user id (nullable for anonymous actions),
+action, entity type/id, correlation id, and a small JSON details payload. Callers
+build details through `AuditDetails`, which only accepts scalar values, caps the
+number and length of fields, and redacts keys such as `Email`, `Password`,
+`Token`, and `CardNumber`. Details never include passwords, tokens, email
+addresses, request bodies, query strings, or headers.
+
+Audit rows are retained for 365 days by default:
+
+```json
+"Audit": {
+  "RetentionDays": 365
+}
+```
+
+Set `Audit:RetentionDays` to `0` to disable automatic cleanup. The cleanup
+service runs at startup and every 24 hours.
+
+There is deliberately no admin HTTP endpoint for audit data; query the table
+directly with a SQLite client:
+
+```sql
+SELECT Timestamp, ActorUserId, Action, EntityType, EntityId, CorrelationId, Details
+FROM AuditLogs
+ORDER BY Timestamp DESC
+LIMIT 100;
+```
+
 ## Configuration & Secrets
 
 Committed `appsettings.json` files contain safe, portable defaults. Values are resolved
@@ -28,16 +112,16 @@ from `appsettings.json`, `appsettings.{Environment}.json`,
 [.NET User Secrets](https://learn.microsoft.com/aspnet/core/security/app-secrets)
 (Development only), environment variables, and command-line arguments — later sources win.
 
-- `ConnectionStrings:DefaultConnection` is `Data Source=ShopiiDb.db` (relative path).
+- `ConnectionStrings:DefaultConnection` is `Data Source=../ShopiiDb.db` (relative path).
 - `DevAuth` in `appsettings.Development.json` uses a placeholder identity
   (`dev@shopii.local` / `00000000-0000-0000-0000-000000000001`).
 - `Jwt:Issuer`, `Jwt:Audience`, and `Jwt:AccessTokenMinutes` have safe defaults.
 - `Jwt:Key` has **no committed value**. It must be supplied locally and in production.
 
-Relative SQLite paths resolve against the **process working directory**: the repository
-root when you run `dotnet run --project Shopii.API` from the root, or `Shopii.API/` when
-running from inside that folder / via Visual Studio. Use an absolute path if you want a
-single fixed database file.
+Relative SQLite paths resolve against the **application content root**, which is the
+`Shopii.API/` folder for `dotnet run --project Shopii.API` and Visual Studio. The default
+`../ShopiiDb.db` therefore points at the repository root. Use an absolute path if you want
+a single fixed database file regardless of how the app is started.
 
 Do **not** commit keys, personal connection strings, emails, or user ids. Override them
 locally instead, either with .NET User Secrets (Development only, stored outside the repo)

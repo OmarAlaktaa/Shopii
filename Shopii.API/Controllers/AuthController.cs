@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
 using MediatR;
+using Shopii.Application.Common.Auditing;
 using Shopii.Application.Features.Users.Commands.RegisterUser;
 using Shopii.Application.Features.Users.Commands.LoginUser;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
+using Shopii.Application.Interfaces.Services;
 
 namespace Shopii.API.Controllers
 {
@@ -13,12 +15,16 @@ namespace Shopii.API.Controllers
     public class AuthController : ControllerBase
     {
         private readonly IMediator _mediator;
+        private readonly IAuditLogger _auditLogger;
 
-        public AuthController(IMediator mediator)
+        public AuthController(
+            IMediator mediator,
+            IAuditLogger auditLogger)
         {
             // mediator function is to send commands and
             // queries to their respective handlers.
             _mediator = mediator;
+            _auditLogger = auditLogger;
         }
 
         [HttpPost("register")]
@@ -34,6 +40,15 @@ namespace Shopii.API.Controllers
             // ValidationException and translated to HTTP 400 by the exception
             // handling middleware.
             var result = await _mediator.Send(command, cancellationToken);
+
+            await _auditLogger.LogAsync(
+                new AuditEvent(
+                    AuditAction.UserRegistered,
+                    AuditEntityTypes.User,
+                    result.UserId,
+                    ActorUserId: result.UserId),
+                cancellationToken);
+
             return Ok(result);
         }
 

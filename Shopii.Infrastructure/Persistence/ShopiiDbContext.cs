@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Shopii.Domain.Entities.Auditing;
 using Shopii.Domain.Entities.Carts;
 using Shopii.Domain.Entities.Orders;
 using Shopii.Domain.Entities.Payments;
@@ -44,6 +45,8 @@ public class ShopiiDbContext : DbContext
     public DbSet<Cart> Carts => Set<Cart>();
 
     public DbSet<CartItem> CartItems => Set<CartItem>();
+
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
@@ -250,6 +253,48 @@ public class ShopiiDbContext : DbContext
             entity.HasOne(i => i.Product)
                 .WithMany()
                 .HasForeignKey(i => i.ProductId);
+        });
+
+        modelBuilder.Entity<AuditLog>(entity =>
+        {
+            entity.ToTable("AuditLogs");
+
+            entity.HasKey(a => a.AuditLogId);
+
+            entity.Property(a => a.AuditLogId)
+                .ValueGeneratedOnAdd();
+
+            entity.Property(a => a.Action)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(a => a.EntityType)
+                .HasMaxLength(100)
+                .IsRequired();
+
+            entity.Property(a => a.EntityId)
+                .HasMaxLength(100);
+
+            entity.Property(a => a.ActorUserId)
+                .HasMaxLength(100);
+
+            entity.Property(a => a.CorrelationId)
+                .HasMaxLength(128);
+
+            entity.Property(a => a.Details)
+                .HasMaxLength(4000);
+
+            entity.HasIndex(a => a.Timestamp)
+                .HasDatabaseName("IX_AuditLogs_Timestamp");
+
+            entity.HasIndex(a => a.ActorUserId)
+                .HasDatabaseName("IX_AuditLogs_ActorUserId");
+
+            entity.HasIndex(a => new { a.EntityType, a.EntityId })
+                .HasDatabaseName("IX_AuditLogs_EntityType_EntityId");
+
+            entity.HasIndex(a => a.CorrelationId)
+                .HasDatabaseName("IX_AuditLogs_CorrelationId");
         });
     }
 }

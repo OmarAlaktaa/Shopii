@@ -81,4 +81,3 @@ ShopiiDb.db.*
 Thumbs.db
 *.swp
 *~
-/Shopii.API/appsettings.json

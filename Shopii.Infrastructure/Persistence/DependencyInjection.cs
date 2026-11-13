@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Shopii.Application.Interfaces.Authentication;
 using Shopii.Application.Interfaces.Persistence;
 using Shopii.Application.Interfaces.Services;
+using Shopii.Infrastructure.Auditing;
 using Shopii.Infrastructure.Authentication;
 using Shopii.Infrastructure.Persistence;
 using Shopii.Infrastructure.Persistence.Interceptors;
@@ -35,6 +36,7 @@ public static class DependencyInjection
                 .UseSqlite(connectionString)
                 .AddInterceptors(serviceProvider.GetRequiredService<SoftDeleteInterceptor>()));
 
+        services.AddScoped<IAuditLogger, AuditLogger>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IRoleRepository, RoleRepository>();
         services.AddScoped<IProductRepository, ProductRepository>();

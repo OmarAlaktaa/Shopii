@@ -61,7 +61,7 @@ namespace Shopii.API.Extensions
             if (role is null)
             {
                 logger.LogWarning(
-                    "DevAuth user was not seeded: role '{Role}' does not exist in User_Roles.",
+                    "DevAuth user was not seeded: role {Role} does not exist in User_Roles.",
                     roleTitle);
                 return;
             }
@@ -78,8 +78,7 @@ namespace Shopii.API.Extensions
             if (emailInUse)
             {
                 logger.LogWarning(
-                    "DevAuth user was not seeded: email '{Email}' is already used by another account.",
-                    email);
+                    "DevAuth user was not seeded: the configured email is already used by another account.");
                 return;
             }
 
@@ -103,9 +102,8 @@ namespace Shopii.API.Extensions
             await db.SaveChangesAsync();
 
             logger.LogInformation(
-                "Seeded development user {UserId} ({Email}) with role '{Role}' for the DevAuth bypass.",
+                "Seeded development user {UserId} with role {Role} for the DevAuth bypass.",
                 userId,
-                email,
                 roleTitle);
         }
     }

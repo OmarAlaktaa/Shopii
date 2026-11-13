@@ -1,4 +1,6 @@
 using MediatR;
+using Microsoft.Extensions.Logging;
+using Shopii.Application.Common.Logging;
 using Shopii.Application.Features.Orders.DTOs;
 using Shopii.Application.Interfaces.Persistence;
 using Shopii.Application.Interfaces.Services;
@@ -13,15 +15,18 @@ namespace Shopii.Application.Features.Orders.Commands.CreateOrder
         private readonly IOrderRepository _orderRepository;
         private readonly ICartRepository _cartRepository;
         private readonly ICurrentUserService _currentUserService;
+        private readonly ILogger<CreateOrderCommandHandler> _logger;
 
         public CreateOrderCommandHandler(
             IOrderRepository orderRepository,
             ICartRepository cartRepository,
-            ICurrentUserService currentUserService)
+            ICurrentUserService currentUserService,
+            ILogger<CreateOrderCommandHandler> logger)
         {
             _orderRepository = orderRepository;
             _cartRepository = cartRepository;
             _currentUserService = currentUserService;
+            _logger = logger;
         }
 
         public async Task<OrderDTO> Handle(
@@ -121,6 +126,13 @@ namespace Shopii.Application.Features.Orders.Commands.CreateOrder
                 payment,
                 cart,
                 cancellationToken);
+
+            // No payment method details, card numbers, or PII.
+            _logger.LogOrderPlaced(
+                order.OrderId,
+                userId,
+                orderItems.Count,
+                totalAmount);
 
             // Reload the lookups so the returned DTO carries their titles.
             order.Status = pendingOrderStatus;

@@ -2,11 +2,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Shopii.API.Models;
+using Shopii.Application.Common.Auditing;
 using Shopii.Application.Features.Products.Commands.CreateProduct;
 using Shopii.Application.Features.Products.Commands.DeleteProduct;
 using Shopii.Application.Features.Products.Commands.UpdateProduct;
 using Shopii.Application.Features.Products.Queries.GetAllProducts;
 using Shopii.Application.Features.Products.Queries.GetProductById;
+using Shopii.Application.Interfaces.Services;
 
 namespace Shopii.API.Controllers
 {
@@ -16,10 +18,14 @@ namespace Shopii.API.Controllers
     {
         // MediatR dispatches commands and queries to their corresponding handlers.
         private readonly IMediator _mediator;
+        private readonly IAuditLogger _auditLogger;
 
-        public ProductsController(IMediator mediator)
+        public ProductsController(
+            IMediator mediator,
+            IAuditLogger auditLogger)
         {
             _mediator = mediator;
+            _auditLogger = auditLogger;
         }
 
         // GET: api/products?pageNumber=1&pageSize=10
@@ -61,6 +67,17 @@ namespace Shopii.API.Controllers
         {
             var product = await _mediator.Send(command, cancellationToken);
 
+            await _auditLogger.LogAsync(
+                new AuditEvent(
+                    AuditAction.ProductCreated,
+                    AuditEntityTypes.Product,
+                    product.ProductId,
+                    Details: AuditDetails.Create(
+                        ("BrandId", product.BrandId),
+                        ("CategoryId", product.CategoryId),
+                        ("SoldPrice", product.SoldPrice))),
+                cancellationToken);
+
             return CreatedAtAction(
                 nameof(GetProductById),
                 new { id = product.ProductId },
@@ -89,6 +106,18 @@ namespace Shopii.API.Controllers
             };
 
             var product = await _mediator.Send(command, cancellationToken);
+
+            await _auditLogger.LogAsync(
+                new AuditEvent(
+                    AuditAction.ProductUpdated,
+                    AuditEntityTypes.Product,
+                    id,
+                    Details: AuditDetails.Create(
+                        ("BrandId", product.BrandId),
+                        ("CategoryId", product.CategoryId),
+                        ("SoldPrice", product.SoldPrice))),
+                cancellationToken);
+
             return Ok(product);
         }
 
@@ -100,6 +129,14 @@ namespace Shopii.API.Controllers
             CancellationToken cancellationToken)
         {
             await _mediator.Send(new DeleteProductCommand(id), cancellationToken);
+
+            await _auditLogger.LogAsync(
+                new AuditEvent(
+                    AuditAction.ProductDeleted,
+                    AuditEntityTypes.Product,
+                    id),
+                cancellationToken);
+
             return NoContent();
         }
     }
